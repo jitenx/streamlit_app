@@ -1,0 +1,26 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.streamlit.pid
+.fastapi.pid
+
+# Virtual environments
+.venv
+.idea
+.ruff_cache
+.github
+olds/
+*.env
+docker.env
+calculations.py
+check/
+docker*
+Docker*
+*.db
+generate_users.py
+generate_posts.py
+*.sql
