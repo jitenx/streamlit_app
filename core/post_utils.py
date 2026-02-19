@@ -4,19 +4,23 @@ from datetime import datetime, timezone
 
 
 def time_ago(timestamp_str: str) -> str:
-    now = datetime.now(timezone.utc)  # Use UTC
+    now = datetime.now(timezone.utc)
     dt = None
 
+    # Remove trailing 'Z' if present
+    ts = timestamp_str.rstrip("Z")
+
+    # Try multiple formats
     for fmt in ("%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S"):
         try:
-            dt = datetime.strptime(timestamp_str, fmt)
-            dt = dt.replace(tzinfo=timezone.utc)  # mark as UTC
+            dt = datetime.strptime(ts, fmt)
+            dt = dt.replace(tzinfo=timezone.utc)
             break
         except ValueError:
             continue
 
     if dt is None:
-        return timestamp_str
+        return timestamp_str  # fallback if parsing fails
 
     diff = now - dt
     seconds = int(diff.total_seconds())
