@@ -7,7 +7,7 @@ wheels/
 *.egg-info
 .streamlit.pid
 .fastapi.pid
-
+*.pyc
 # Virtual environments
 .venv
 .idea

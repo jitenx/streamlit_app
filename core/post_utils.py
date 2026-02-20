@@ -1,6 +1,7 @@
 # core/post_utils.py
 
 from datetime import datetime, timezone
+from core.api import post
 
 
 def time_ago(timestamp_str: str) -> str:
@@ -40,15 +41,15 @@ def time_ago(timestamp_str: str) -> str:
     return f"{years} year{'s' if years != 1 else ''} ago"
 
 
-# # -------------------- POST HANDLERS --------------------
-# def handle_create_post(title, content, published):
-#     if not title or not content:
-#         return "Title and content are required"
-#     try:
-#         post("/posts", {"title": title, "content": content, "published": published})
-#     except Exception as e:
-#         return f"Failed to create post: {str(e)}"
-#     return None  # success
+# -------------------- POST HANDLERS --------------------
+def handle_create_post(title, content, published):
+    if not title or not content:
+        return "Title and content are required"
+    try:
+        post("/posts", {"title": title, "content": content, "published": published})
+    except Exception as e:
+        return f"Failed to create post: {str(e)}"
+    return None  # success
 
 
 # def fetch_posts_batch(batch_size, post_skip):

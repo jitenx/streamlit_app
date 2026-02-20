@@ -4,9 +4,29 @@ from core.auth import require_auth, logout
 from core.api import get, patch, delete
 from ui.sidebar import render_sidebar
 from core.validators import valid_email, check_password_strength
+from core.post_utils import handle_create_post
 
 
 require_auth()
+# -------------------- SIDEBAR QUICK POST --------------------
+with st.sidebar.expander("➕ Quick Post", expanded=False):
+    with st.form("sidebar_create_form", clear_on_submit=True):
+        sidebar_title = st.text_input("Title").strip()
+        sidebar_content = st.text_area("Content").strip()
+        sidebar_published = st.checkbox("Publish now?", value=True)
+        submitted_sidebar = st.form_submit_button("Create")
+
+    if submitted_sidebar:
+        error = handle_create_post(sidebar_title, sidebar_content, sidebar_published)
+        if error:
+            st.error(error)
+        else:
+            st.toast("Post created 🎉")
+            # reset feed for new post
+            st.session_state.posts_loaded = []
+            st.session_state.post_skip = 0
+            st.rerun()
+st.sidebar.divider()
 render_sidebar()
 
 st.title("👤 User Profile")
