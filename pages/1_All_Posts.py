@@ -3,6 +3,7 @@ from core.auth import require_auth
 from core.api import get, post, patch, delete
 from ui.sidebar import render_sidebar
 from core.post_utils import time_ago
+import datetime
 
 
 # -------------------- AUTH --------------------
@@ -45,6 +46,42 @@ with st.sidebar.expander("➕ Quick Post", expanded=False):
 st.sidebar.divider()
 render_sidebar()
 st.title("📰 Feed")
+col1, col2 = st.columns(2)
+start_date = col1.date_input("Start Date", value=None)
+end_date = col2.date_input("End Date", value=None)
+
+# Convert to datetime for API
+start_datetime = (
+    datetime.datetime.combine(start_date, datetime.time.min) if start_date else None
+)
+end_datetime = (
+    datetime.datetime.combine(end_date, datetime.time.max) if end_date else None
+)
+
+# Reset feed when filters change
+if (
+    "start_date_filter" not in st.session_state
+    or st.session_state.start_date_filter != start_datetime
+    or st.session_state.end_date_filter != end_datetime
+):
+    st.session_state.start_date_filter = start_datetime
+    st.session_state.end_date_filter = end_datetime
+    st.session_state.posts_loaded = []
+    st.session_state.post_skip = 0
+
+# -------------------- SEARCH BAR --------------------
+search_query = st.text_input(
+    "🔎 Search posts", placeholder="Search by title or content..."
+)
+
+if "search_query" not in st.session_state:
+    st.session_state.search_query = ""
+
+# If search changed → reset pagination
+if search_query != st.session_state.search_query:
+    st.session_state.search_query = search_query
+    st.session_state.posts_loaded = []
+    st.session_state.post_skip = 0
 st.divider()
 
 
@@ -131,7 +168,19 @@ BATCH_SIZE = 50
 
 def fetch_posts_batch():
     skip = st.session_state.post_skip
-    new_posts = get(f"/posts?limit={BATCH_SIZE}&skip={skip}")
+    search = st.session_state.search_query
+    start_date = st.session_state.start_date_filter
+    end_date = st.session_state.end_date_filter
+
+    query_params = f"limit={BATCH_SIZE}&skip={skip}"
+    if search:
+        query_params += f"&search={search}"
+    if start_date:
+        query_params += f"&start_date={start_date.isoformat()}"
+    if end_date:
+        query_params += f"&end_date={end_date.isoformat()}"
+
+    new_posts = get(f"/posts?{query_params}")
     st.session_state.posts_loaded.extend(new_posts)
     st.session_state.post_skip += len(new_posts)
 
