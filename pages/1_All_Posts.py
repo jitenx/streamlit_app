@@ -82,6 +82,21 @@ if search_query != st.session_state.search_query:
     st.session_state.search_query = search_query
     st.session_state.posts_loaded = []
     st.session_state.post_skip = 0
+
+# -------------------- SORT --------------------
+sort_option = st.selectbox(
+    "Sort by",
+    ["Newest", "Oldest", "Popularity"],
+)
+
+if "sort_option" not in st.session_state:
+    st.session_state.sort_option = "Newest"
+
+# If sort changed → reset pagination
+if sort_option != st.session_state.sort_option:
+    st.session_state.sort_option = sort_option
+    st.session_state.posts_loaded = []
+    st.session_state.post_skip = 0
 st.divider()
 
 
@@ -166,13 +181,34 @@ if "posts_loaded" not in st.session_state:
 BATCH_SIZE = 50
 
 
+# def fetch_posts_batch():
+#     skip = st.session_state.post_skip
+#     search = st.session_state.search_query
+#     start_date = st.session_state.start_date_filter
+#     end_date = st.session_state.end_date_filter
+
+#     query_params = f"limit={BATCH_SIZE}&skip={skip}"
+#     if search:
+#         query_params += f"&search={search}"
+#     if start_date:
+#         query_params += f"&start_date={start_date.isoformat()}"
+#     if end_date:
+#         query_params += f"&end_date={end_date.isoformat()}"
+
+#     new_posts = get(f"/posts?{query_params}")
+#     st.session_state.posts_loaded.extend(new_posts)
+#     st.session_state.post_skip += len(new_posts)
+
+
 def fetch_posts_batch():
     skip = st.session_state.post_skip
     search = st.session_state.search_query
     start_date = st.session_state.start_date_filter
     end_date = st.session_state.end_date_filter
+    sort_option = st.session_state.sort_option
 
     query_params = f"limit={BATCH_SIZE}&skip={skip}"
+
     if search:
         query_params += f"&search={search}"
     if start_date:
@@ -180,7 +216,17 @@ def fetch_posts_batch():
     if end_date:
         query_params += f"&end_date={end_date.isoformat()}"
 
+    # 🔥 IMPORTANT: Convert UI value to backend value
+    sort_map = {
+        "Newest": "newest",
+        "Oldest": "oldest",
+        "Popularity": "popularity",
+    }
+
+    query_params += f"&sort={sort_map[sort_option]}"
+
     new_posts = get(f"/posts?{query_params}")
+
     st.session_state.posts_loaded.extend(new_posts)
     st.session_state.post_skip += len(new_posts)
 
