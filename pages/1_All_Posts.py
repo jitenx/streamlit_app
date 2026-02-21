@@ -5,7 +5,7 @@ from ui.sidebar import render_sidebar
 from core.post_utils import time_ago
 import datetime
 
-# 1. -------------------- PAGE CONFIG & STYLES --------------------
+# 1. -------------------- PAGE CONFIG & DYNAMIC THEME CSS --------------------
 st.set_page_config(page_title="Modern Feed", layout="centered")
 
 st.markdown(
@@ -14,17 +14,16 @@ st.markdown(
     /* Card adapts to light/dark background */
     div[data-testid="stVBCard"] {
         border-radius: 16px;
-        border: 1px solid rgba(128, 128, 128, 0.2); /* Dynamic subtle border */
+        border: 1px solid rgba(128, 128, 128, 0.2);
         padding: 24px;
         margin-bottom: 20px;
-        background-color: rgba(128, 128, 128, 0.05); /* Very slight tint */
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        background-color: rgba(128, 128, 128, 0.03);
+        transition: transform 0.2s ease;
     }
     
     div[data-testid="stVBCard"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
         border-color: #ff4b4b;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     
     /* Metadata - uses secondary text color */
@@ -32,25 +31,30 @@ st.markdown(
         color: var(--text-color);
         opacity: 0.6;
         font-size: 0.85rem;
-        font-weight: 500;
         margin-bottom: 8px;
     }
 
-    /* Dynamic Title - High contrast in both modes */
+    /* Dynamic Title - Auto-adjusts for Dark/Light Mode */
     .post-title {
         font-size: 1.5rem;
         font-weight: 800;
-        color: var(--text-color); /* Automatically switches white/black */
+        color: var(--text-color);
         margin-bottom: 12px;
         letter-spacing: -0.02em;
         line-height: 1.2;
     }
 
-    /* Post Content Text */
-    .stMarkdown p {
-        color: var(--text-color);
-        opacity: 0.9;
-        line-height: 1.6;
+    /* Sleek Draft Badge */
+    .draft-badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 20px;
+        background-color: rgba(255, 165, 0, 0.2);
+        color: #ffa500;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        margin-bottom: 10px;
     }
     </style>
 """,
@@ -88,9 +92,9 @@ def handle_create_post(title, content, published):
 @st.dialog("➕ Create Post")
 def create_post_dialog():
     with st.form("create_main_form", clear_on_submit=True):
-        c_title = st.text_input("Title").strip()
-        c_content = st.text_area("Content").strip()
-        c_published = st.checkbox("Publish now?", value=True)
+        c_title = st.text_input("Title", key="dialog_create_title").strip()
+        c_content = st.text_area("Content", key="dialog_create_content").strip()
+        c_published = st.checkbox("Publish now?", value=True, key="dialog_create_pub")
         col1, col2 = st.columns(2)
         if col1.form_submit_button("Create", type="primary"):
             error = handle_create_post(c_title, c_content, c_published)
@@ -107,22 +111,36 @@ def create_post_dialog():
 @st.dialog("✏️ Update Post")
 def update_post_dialog(post_data):
     with st.form("update_post_form"):
-        title = st.text_input("Title", post_data["title"]).strip()
-        content = st.text_area("Content", post_data["content"]).strip()
-        published = st.checkbox("Published", post_data["published"])
+        u_t = st.text_input(
+            "Title", post_data["title"], key=f"upd_t_{post_data['id']}"
+        ).strip()
+        u_c = st.text_area(
+            "Content", post_data["content"], key=f"upd_c_{post_data['id']}"
+        ).strip()
+        u_p = st.checkbox(
+            "Published", post_data["published"], key=f"upd_p_{post_data['id']}"
+        )
+
         if st.form_submit_button("💾 Save", type="primary"):
-            patch(
-                f"/posts/{post_data['id']}",
-                {"title": title, "content": content, "published": published},
-            )
-            st.toast("Post updated ✅")
-            reset_feed()
-            st.rerun()
+            # --- Validation Check ---
+            if not u_t or not u_c:
+                st.error("Title and Content cannot be empty!")
+            else:
+                patch(
+                    f"/posts/{post_data['id']}",
+                    {"title": u_t, "content": u_c, "published": u_p},
+                )
+                st.toast("Post updated ✅")
+                # If they published it via the edit dialog, reset toggle state
+                if u_p:
+                    st.session_state.draft_toggle_state = False
+                reset_feed()
+                st.rerun()
 
 
 @st.dialog("🗑️ Confirm Delete")
 def confirm_delete(post_id):
-    st.warning("Delete this post?")
+    st.warning("Delete this post permanently?")
     if st.button("Delete Forever", type="primary", use_container_width=True):
         delete(f"/posts/{post_id}")
         st.toast("Post deleted 🗑️")
@@ -134,15 +152,20 @@ def confirm_delete(post_id):
 with st.sidebar:
     with st.expander("➕ Quick Post", expanded=False):
         with st.form("sidebar_create_form", clear_on_submit=True):
-            s_title = st.text_input("Title")
-            s_content = st.text_area("Content")
-            s_published = st.checkbox("Publish now?", value=True)
+            s_title = st.text_input("Title", key="sidebar_title")
+            s_content = st.text_area("Content", key="sidebar_content")
+            s_published = st.checkbox(
+                "Publish now?", value=True, key="sidebar_create_pub"
+            )
             if st.form_submit_button("Post"):
                 error = handle_create_post(s_title, s_content, s_published)
                 if not error:
                     st.toast("Posted!")
                     reset_feed()
                     st.rerun()
+                else:
+                    st.error(error)
+
     st.divider()
     render_sidebar()
 
@@ -151,22 +174,33 @@ st.title("📰 Feed")
 
 top_col1, top_col2, top_col3 = st.columns([1.5, 3, 1.5])
 with top_col1:
-    if st.button("➕ Create Post", type="primary", use_container_width=True):
+    if st.button(
+        "➕ Create", type="primary", use_container_width=True, key="main_create_btn"
+    ):
         create_post_dialog()
 with top_col2:
-    search_query = st.text_input(
-        "🔎 Search", placeholder="Search posts...", label_visibility="collapsed"
+    search_q = st.text_input(
+        "Search",
+        placeholder="Search posts...",
+        label_visibility="collapsed",
+        key="feed_search",
     )
 with top_col3:
-    sort_choice = st.selectbox(
-        "Sort", ["Newest", "Oldest", "Popularity"], label_visibility="collapsed"
+    sort_c = st.selectbox(
+        "Sort",
+        ["Newest", "Oldest", "Popularity"],
+        label_visibility="collapsed",
+        key="feed_sort",
     )
 
-if search_query != st.session_state.get(
-    "search_query"
-) or sort_choice != st.session_state.get("sort_option"):
-    st.session_state.search_query = search_query
-    st.session_state.sort_option = sort_choice
+# Draft Toggle
+show_drafts_only = st.toggle("📝 Show drafts", value=False, key="draft_toggle")
+
+if search_q != st.session_state.get("search_query") or sort_c != st.session_state.get(
+    "sort_option"
+):
+    st.session_state.search_query = search_q
+    st.session_state.sort_option = sort_c
     reset_feed()
     st.rerun()
 
@@ -175,10 +209,10 @@ if search_query != st.session_state.get(
 def fetch_posts_batch():
     skip = st.session_state.post_skip
     search = st.session_state.get("search_query", "")
-    sort_option = st.session_state.get("sort_option", "Newest")
+    sort_opt = st.session_state.get("sort_option", "Newest")
     sort_map = {"Newest": "newest", "Oldest": "oldest", "Popularity": "popularity"}
 
-    query_params = f"limit=20&skip={skip}&sort={sort_map[sort_option]}"
+    query_params = f"limit=20&skip={skip}&sort={sort_map[sort_opt]}"
     if search:
         query_params += f"&search={search}"
 
@@ -191,11 +225,21 @@ if not st.session_state.posts_loaded:
     fetch_posts_batch()
 
 # 8. -------------------- FEED DISPLAY LOOP --------------------
-for idx, item in enumerate(st.session_state.posts_loaded):
+display_posts = st.session_state.posts_loaded
+if show_drafts_only:
+    display_posts = [
+        i
+        for i in display_posts
+        if not i["Post"]["published"] and i["Post"]["owner_id"] == current_user_id
+    ]
+    if not display_posts:
+        st.info("No drafts found.")
+
+for idx, item in enumerate(display_posts):
     p_data, p_id = item["Post"], item["Post"]["id"]
     is_owner = p_data["owner_id"] == current_user_id
 
-    expand_key = f"expand_{p_id}_{idx}"
+    expand_key = f"exp_{p_id}_{idx}"
     if expand_key not in st.session_state:
         st.session_state[expand_key] = False
 
@@ -209,6 +253,11 @@ for idx, item in enumerate(st.session_state.posts_loaded):
             m2.markdown(
                 f"<div style='text-align:right;'><b>{item['votes']}</b> 👍</div>",
                 unsafe_allow_html=True,
+            )
+
+        if is_owner and not p_data["published"]:
+            st.markdown(
+                "<span class='draft-badge'>📝 Draft</span>", unsafe_allow_html=True
             )
 
         st.markdown(
@@ -229,9 +278,6 @@ for idx, item in enumerate(st.session_state.posts_loaded):
                     st.session_state[expand_key] = False
                     st.rerun()
 
-        if is_owner and not p_data["published"]:
-            st.warning("Draft Mode", icon="📝")
-
         # Action Buttons
         b1, b2, b3 = st.columns([1.5, 1, 1])
         if is_owner and not p_data["published"]:
@@ -244,8 +290,9 @@ for idx, item in enumerate(st.session_state.posts_loaded):
                 st.rerun()
         else:
             v_act = item["user_voted"]
+            v_lab = "👍 Vote" if not v_act else "👎 Unvote"
             if b1.button(
-                "👍 Vote" if not v_act else "👎 Unvote",
+                v_lab,
                 key=f"v_{p_id}_{idx}",
                 use_container_width=True,
                 type="primary" if v_act else "secondary",
@@ -261,7 +308,7 @@ for idx, item in enumerate(st.session_state.posts_loaded):
             if b3.button("🗑️", key=f"dl_{p_id}", use_container_width=True):
                 confirm_delete(p_id)
 
-if len(st.session_state.posts_loaded) >= 10:
-    if st.button("Load More", use_container_width=True):
+if len(st.session_state.posts_loaded) >= 20:
+    if st.button("Load More", use_container_width=True, key="load_more_footer"):
         fetch_posts_batch()
         st.rerun()
