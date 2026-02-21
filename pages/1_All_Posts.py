@@ -3,7 +3,6 @@ from core.auth import require_auth
 from core.api import get, post, patch, delete
 from ui.sidebar import render_sidebar
 from core.post_utils import time_ago
-import datetime
 
 # 1. -------------------- PAGE CONFIG & DYNAMIC THEME CSS --------------------
 st.set_page_config(page_title="Modern Feed", layout="centered")
