@@ -3,6 +3,7 @@ from core.auth import require_auth
 from core.api import get, post, patch, delete
 from ui.sidebar import render_sidebar
 from core.post_utils import time_ago
+from datetime import datetime, timedelta
 
 # 1. -------------------- PAGE CONFIG & DYNAMIC THEME CSS --------------------
 st.set_page_config(page_title="Modern Feed", layout="centered")
@@ -10,7 +11,6 @@ st.set_page_config(page_title="Modern Feed", layout="centered")
 st.markdown(
     """
     <style>
-    /* Card adapts to light/dark background */
     div[data-testid="stVBCard"] {
         border-radius: 16px;
         border: 1px solid rgba(128, 128, 128, 0.2);
@@ -19,41 +19,16 @@ st.markdown(
         background-color: rgba(128, 128, 128, 0.03);
         transition: transform 0.2s ease;
     }
-    
     div[data-testid="stVBCard"]:hover {
         border-color: #ff4b4b;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
-    
-    /* Metadata - uses secondary text color */
-    .post-meta {
-        color: var(--text-color);
-        opacity: 0.6;
-        font-size: 0.85rem;
-        margin-bottom: 8px;
-    }
-
-    /* Dynamic Title - Auto-adjusts for Dark/Light Mode */
-    .post-title {
-        font-size: 1.5rem;
-        font-weight: 800;
-        color: var(--text-color);
-        margin-bottom: 12px;
-        letter-spacing: -0.02em;
-        line-height: 1.2;
-    }
-
-    /* Sleek Draft Badge */
+    .post-meta { color: var(--text-color); opacity: 0.6; font-size: 0.85rem; margin-bottom: 8px; }
+    .post-title { font-size: 1.5rem; font-weight: 800; color: var(--text-color); margin-bottom: 12px; letter-spacing: -0.02em; line-height: 1.2; }
     .draft-badge {
-        display: inline-block;
-        padding: 2px 10px;
-        border-radius: 20px;
-        background-color: rgba(255, 165, 0, 0.2);
-        color: #ffa500;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        margin-bottom: 10px;
+        display: inline-block; padding: 2px 10px; border-radius: 20px;
+        background-color: rgba(255, 165, 0, 0.2); color: #ffa500;
+        font-size: 0.75rem; font-weight: 700; text-transform: uppercase; margin-bottom: 10px;
     }
     </style>
 """,
@@ -119,9 +94,7 @@ def update_post_dialog(post_data):
         u_p = st.checkbox(
             "Published", post_data["published"], key=f"upd_p_{post_data['id']}"
         )
-
         if st.form_submit_button("💾 Save", type="primary"):
-            # --- Validation Check ---
             if not u_t or not u_c:
                 st.error("Title and Content cannot be empty!")
             else:
@@ -130,9 +103,6 @@ def update_post_dialog(post_data):
                     {"title": u_t, "content": u_c, "published": u_p},
                 )
                 st.toast("Post updated ✅")
-                # If they published it via the edit dialog, reset toggle state
-                if u_p:
-                    st.session_state.draft_toggle_state = False
                 reset_feed()
                 st.rerun()
 
@@ -164,7 +134,6 @@ with st.sidebar:
                     st.rerun()
                 else:
                     st.error(error)
-
     st.divider()
     render_sidebar()
 
@@ -192,14 +161,23 @@ with top_col3:
         key="feed_sort",
     )
 
-# Draft Toggle
+# --- DATE FILTER ADDED HERE ---
+with st.expander("📅 Filter by Date"):
+    date_range = st.date_input(
+        "Select Range", value=[], help="Select a start and end date to filter posts."
+    )
+
 show_drafts_only = st.toggle("📝 Show drafts", value=False, key="draft_toggle")
 
-if search_q != st.session_state.get("search_query") or sort_c != st.session_state.get(
-    "sort_option"
+# Trigger reset if filters change
+if (
+    search_q != st.session_state.get("search_query")
+    or sort_c != st.session_state.get("sort_option")
+    or date_range != st.session_state.get("date_range")
 ):
     st.session_state.search_query = search_q
     st.session_state.sort_option = sort_c
+    st.session_state.date_range = date_range
     reset_feed()
     st.rerun()
 
@@ -209,11 +187,19 @@ def fetch_posts_batch():
     skip = st.session_state.post_skip
     search = st.session_state.get("search_query", "")
     sort_opt = st.session_state.get("sort_option", "Newest")
+    d_range = st.session_state.get("date_range", [])
+
     sort_map = {"Newest": "newest", "Oldest": "oldest", "Popularity": "popularity"}
 
     query_params = f"limit=20&skip={skip}&sort={sort_map[sort_opt]}"
+
     if search:
         query_params += f"&search={search}"
+
+    # Passing Date Objects to Backend
+    if len(d_range) == 2:
+        query_params += f"&start_date={d_range[0].isoformat()}"
+        query_params += f"&end_date={d_range[1].isoformat()}"
 
     new_posts = get(f"/posts?{query_params}")
     st.session_state.posts_loaded.extend(new_posts)
@@ -237,7 +223,6 @@ if show_drafts_only:
 for idx, item in enumerate(display_posts):
     p_data, p_id = item["Post"], item["Post"]["id"]
     is_owner = p_data["owner_id"] == current_user_id
-
     expand_key = f"exp_{p_id}_{idx}"
     if expand_key not in st.session_state:
         st.session_state[expand_key] = False
@@ -263,7 +248,6 @@ for idx, item in enumerate(display_posts):
             f"<div class='post-title'>{p_data['title']}</div>", unsafe_allow_html=True
         )
 
-        # Read More
         txt = p_data["content"]
         if len(txt) > 250 and not st.session_state[expand_key]:
             st.write(txt[:250] + "...")
@@ -272,12 +256,12 @@ for idx, item in enumerate(display_posts):
                 st.rerun()
         else:
             st.write(txt)
-            if len(txt) > 250:
-                if st.button("Show less ↑", key=f"l_{p_id}_{idx}", type="secondary"):
-                    st.session_state[expand_key] = False
-                    st.rerun()
+            if len(txt) > 250 and st.button(
+                "Show less ↑", key=f"l_{p_id}_{idx}", type="secondary"
+            ):
+                st.session_state[expand_key] = False
+                st.rerun()
 
-        # Action Buttons
         b1, b2, b3 = st.columns([1.5, 1, 1])
         if is_owner and not p_data["published"]:
             if b1.button(
