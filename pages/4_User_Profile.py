@@ -112,7 +112,10 @@ with tab4:
         confirm_password = st.text_input("Confirm New Password", type="password")
 
         col1, col2 = st.columns(2)
-        save = col1.form_submit_button("💾 Save")
+        save = col1.form_submit_button(
+            "💾 Save",
+            disabled=not (current_password and new_password and confirm_password),
+        )
 
     if save:
         # 1️⃣ Check all fields filled
@@ -159,22 +162,102 @@ with tab4:
 
 # -------------------- DELETE ACCOUNT --------------------
 with tab5:
-    st.error("🛑 This will permanently delete your account!")
-    # st.warning("This action cannot be undone")
+    st.subheader("🗑️ Delete Account")
 
-    password = st.text_input("Confirm your password", type="password")
-    confirm = st.checkbox("I understand this action is irreversible")
+    st.error("Danger Zone")
 
-    col1, col2 = st.columns(2)
-    # if col2.button("❌ Cancel"):
-    #     st.session_state.active_tab = "Profile"
-    #     st.rerun()
+    st.markdown(
+        "Deleting your account will permanently remove all your data. "
+        "This action cannot be undone."
+    )
 
-    if col1.button("🗑️ Yes, delete my account", disabled=not (confirm and password)):
-        response = delete(f"/users/{user['id']}", {"password": password})
-        if response.status_code == 204:
-            st.success("✅ Account deleted")
-            time.sleep(2)
-            logout()
-        else:
-            st.error("❌ Incorrect password")
+    # Initialize state
+    if "confirm_delete" not in st.session_state:
+        st.session_state.confirm_delete = False
+
+    st.divider()
+
+    # STEP 1: Initial Button
+    if not st.session_state.confirm_delete:
+        if st.button("🗑️ Delete My Account", type="primary"):
+            st.session_state.confirm_delete = True
+            st.rerun()
+
+    # STEP 2: Confirmation Card
+    if st.session_state.confirm_delete:
+        # Wrap the card in a container with a unique key for CSS scoping
+        with st.container():
+            container_id = "delete-confirm-card"
+            st.markdown(f'<div id="{container_id}">', unsafe_allow_html=True)
+
+            st.warning("⚠️ Final Confirmation Required")
+
+            st.markdown(
+                "Please confirm your password and acknowledge that this "
+                "action is irreversible."
+            )
+
+            with st.form("final_delete_form"):
+                password = st.text_input(
+                    "Enter your password to confirm",
+                    type="password",
+                )
+
+                confirm = st.checkbox("Yes, I understand this action is irreversible")
+
+                col1, col2 = st.columns(2)
+                cancel_btn = col1.form_submit_button("Cancel")
+                confirm_btn = col2.form_submit_button("Confirm Delete")
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # ---- Cancel Action ----
+        if cancel_btn:
+            st.session_state.confirm_delete = False
+            st.rerun()
+
+        # ---- Confirm Delete ----
+        if confirm_btn:
+            if not password:
+                st.error("❌ Password is required")
+            elif not confirm:
+                st.error("❌ You must confirm the irreversible action")
+            else:
+                try:
+                    response = delete(
+                        f"/users/{user['id']}",
+                        {"password": password},
+                    )
+
+                    if response.status_code == 204:
+                        st.success("✅ Account deleted successfully")
+                        time.sleep(2)
+                        logout()
+                    else:
+                        st.error("❌ Incorrect password")
+
+                except Exception as e:
+                    st.error(f"❌ Failed to delete account: {str(e)}")
+
+
+# # -------------------- DELETE ACCOUNT --------------------
+# with tab5:
+#     st.error("🛑 This will permanently delete your account!")
+#     # st.warning("This action cannot be undone")
+
+#     password = st.text_input("Confirm your password", type="password")
+#     confirm = st.checkbox("I understand this action is irreversible")
+
+#     col1, col2 = st.columns(2)
+#     # if col2.button("❌ Cancel"):
+#     #     st.session_state.active_tab = "Profile"
+#     #     st.rerun()
+
+#     if col1.button("🗑️ Yes, delete my account", disabled=not (confirm and password)):
+#         response = delete(f"/users/{user['id']}", {"password": password})
+#         if response.status_code == 204:
+#             st.success("✅ Account deleted")
+#             time.sleep(2)
+#             logout()
+#         else:
+#             st.error("❌ Incorrect password")
